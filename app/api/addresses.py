@@ -88,6 +88,7 @@ async def retrieve_address(
         raise HTTPException(status_code=500, detail=f"Server error {e}") from e
 
 
+# TODO: remove this endpoint when you are done testing
 @router.get("/private_key/")
 async def retrieve_private_key():
     try:
