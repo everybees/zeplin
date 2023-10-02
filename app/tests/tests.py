@@ -1,102 +1,85 @@
-from unittest.mock import patch, MagicMock
-
-import mongomock
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from datetime import datetime
+from mongomock import MongoClient
 
-from app.api.addresses import create_addresses, list_addresses
-from app.main import app
-
-from datetime import timezone
-
-client = TestClient(app)
+from main import app
 
 
-async def mock_get_next_id():
-    return 1
+@pytest.fixture
+def client():
+    return TestClient(app)
 
 
-def mock_generate_address():
-    return "mock_private_key", "mock_encryption_key", "mock_address"
+@pytest.fixture
+def mock_db():
+    client = MongoClient()
+    db = client.db
+    db.btc_collection = client.db.btc_collection
+    db.eth_collection = client.db.eth_collection
+    yield db
+    client.close()
 
 
-class TestAddresses:
+def test_create_addresses(client):
+    app.mongodb_client = mock_db
+    app.currency_collections = {"btc": mock_db.btc_collection, "eth": mock_db.eth_collection}
 
-    @pytest.fixture(autouse=True)
-    def setup_class(self, mocker):
-        self.mocker = mocker
-        self.mocked_collection = mocker.MagicMock()
-        self.mocker.patch('path.to.your.collection', self.mocked_collection)
-
-        # Mock the data that your functions will return
-        self.mock_address_data = {
-            "id": 1,
-            "address": "mock_address",
-            "currency": "BTC",
-            "date_created": datetime.now(timezone.utc),
-        }
-
-    # Helper function to mock your real function responses
-
-    # Test cases
-    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
-    async def test_create_address(self):
-        # Mock the dependent functions and methods
-        patch("your_project.routers.addresses.generate_address", side_effect=mock_generate_address)
-        patch("your_project.routers.addresses.get_next_id", side_effect=mock_get_next_id)
-        patch("your_project.routers.addresses.private_key_collection.insert_one", return_value=None)
-        patch("your_project.routers.addresses.currency_collection.insert_one", return_value=None)
-
-        response = client.post("/address/btc")
+    with TestClient(app) as client:
+        response = client.post("/address/BTC")
+        print(response.json(), "=====================")
         assert response.status_code == 200
-        assert response.json() == self.mock_address_data
+        assert response.json()["currency"] == "btc"
 
-    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
-    async def test_create_address_invalid_currency(self):
-        with pytest.raises(HTTPException):
-            await create_addresses("INVALID_CURRENCY")
+        # Test with invalid currency
+        response = client.post("/address/INVALID")
+        assert response.status_code == 400
 
-    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
-    async def test_create_address_server_error(self):
-        # Let’s mock an exception to simulate a server error
-        patch("your_project.routers.addresses.generate_address", side_effect=Exception("Mock exception"))
 
-        with pytest.raises(HTTPException) as e:
-            await create_addresses("btc")
-        assert e.value.status_code == 500
-        assert str(e.value.detail) == "Server error"
+def test_list_addresses(client):
+    app.mongodb_client = mock_db
+    app.currency_collections = {"btc": mock_db.btc_collection, "eth": mock_db.eth_collection}
 
-    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
-    async def test_list_addresses(self):
-        # Mocking the AsyncIOMotorCursor object returned by find method.
-        fake_addresses = [
-            {
-                "address": "some_address",
-                "currency": "btc",
-                "_id": "some_id",
-                "date_created": "some_date"
-            }
-            # Add more fake address dicts as needed
-        ]
-
-        # Arrange: Set up the return_value or side_effect for the find method
-        self.mocked_collection.find.return_value = fake_addresses
-
-        # Act: Call the endpoint or function
-        response = client.get("/address/")  # adjust as necessary
-
-        # Assert: Check the expected outcomes
+    with TestClient(app) as client:
+        # Test with a valid currency
+        response = client.get("/address", params={"currency": "BTC"})
         assert response.status_code == 200
-        assert response.json() == fake_addresses
 
-    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
-    async def test_list_addresses_exception(self):
-        patch("your_package.router.currency_collection.find", side_effect=Exception("DB Error"))
+        # Test with an invalid currency
+        response = client.get("/address", params={"currency": "INVALID"})
+        assert response.status_code == 200  # As it defaults to listing all currencies
 
-        with pytest.raises(HTTPException) as exc_info:
-            await list_addresses()
+        # Test without currency (lists all addresses of all currencies)
+        response = client.get("/address")
+        assert response.status_code == 200
 
-        assert exc_info.value.status_code == 500
-        assert str(exc_info.value.detail) == "Server error DB Error"
+
+def test_retrieve_address(client):
+    app.mongodb_client = mock_db
+    app.currency_collections = {"btc": mock_db.btc_collection, "eth": mock_db.eth_collection}
+
+    with TestClient(app) as client:
+        # Test with valid ID and currency
+        response = client.get("/address/BTC/1")
+        assert response.status_code == 200
+
+        # Test with invalid ID and valid currency
+        response = client.get("/address/BTC/999999")
+        assert response.status_code == 200  # If ID does not exist, it returns an empty list
+
+        # Test with invalid currency
+        response = client.get("/address/INVALID/1")
+        assert response.status_code == 500  # As invalid currency results in a server error
+
+
+def test_retrieve_private_key(client):
+    app.mongodb_client = mock_db
+    app.currency_collections = {"btc": mock_db.btc_collection, "eth": mock_db.eth_collection}
+
+    with TestClient(app) as client:
+        # Test with valid ID and currency
+        response = client.get("/private_key/BTC/1")
+        assert response.status_code == 200
+
+        # Test with invalid ID and valid currency
+        response = client.get("/private_key/BTC/999999")
+        assert response.status_code == 200

@@ -7,3 +7,4 @@ eth-keys~=0.4.0
 cryptography~=41.0.4
 mongomock~=4.1.2
 eth-hash[pycryptodome]
+httpx~=0.25.0

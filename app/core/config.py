@@ -1,4 +1,5 @@
 import os
+import logging
 
 
 MONGODB_URL = os.getenv("MONGODB_URL")
@@ -9,3 +10,7 @@ CURRENCIES = {
     "btc": "BTC",
     "eth": "ETH",
 }
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
