@@ -22,8 +22,8 @@ ensuring secure storage and recovery mechanisms for wallets.
 1. Clone the Repository:
 
 ```sh
-git clone <repository-url>
-cd <project-directory>
+git clone https://github.com/everybees/zeplin
+cd zeplin
 ```
 
 2. Build and Run the Docker Containers:
