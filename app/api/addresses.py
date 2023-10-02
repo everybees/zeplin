@@ -1,44 +1,43 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import APIRouter, HTTPException, Query
 
-from core.config import MONGODB_URL, PRIVATE_KEY_COLLECTION_NAME, CURRENCY_COLLECTION_NAME
+from core.config import CURRENCIES
 from db.mongodb import get_next_id
-from models.models import CryptoCurrency, Address
+from models.addresses import Address
 from services.crypto_service import generate_address
+
+from db.mongodb import app
 
 router = APIRouter()
 
-db_client = AsyncIOMotorClient(MONGODB_URL)
-db = db_client.get_database()
-currency_collection = db.get_collection(CURRENCY_COLLECTION_NAME)
-private_key_collection = db.get_collection(PRIVATE_KEY_COLLECTION_NAME)
-
 
 @router.post("/address/{currency}", response_model=Address)
-async def create_addresses(currency: CryptoCurrency):
+async def create_addresses(currency: str):
     try:
-        if currency not in ["BTC", "ETH"]:
+        if currency.lower() not in CURRENCIES:
             raise HTTPException(status_code=400, detail="Invalid currency")
-
+        currency = currency.lower()
+        next_id = await get_next_id(app.currency_collections[currency])
+        print(next_id, "NEXT_ID")
         private_key, encryption_key, address = generate_address(currency)
         date_created = datetime.utcnow()
-        next_id = await get_next_id(currency_collection)
 
-        await private_key_collection.insert_one({
+        await app.private_key_collections[currency].insert_one({
             "encrypted_private_key": private_key,
             "encryption_key": encryption_key,
             "currency": currency
         })
 
-        await currency_collection.insert_one({
+        await app.currency_collections[currency].insert_one({
             "_id": next_id,
             "address": address,
             "currency": currency,
             "date_created": date_created
         })
+
+        print(private_key, encryption_key, address)
 
         return Address(
             id=next_id,
@@ -51,31 +50,43 @@ async def create_addresses(currency: CryptoCurrency):
         raise HTTPException(status_code=500, detail="Server error") from e
 
 
-@router.get(
-    "/address/", response_model=List[Address])
-async def list_addresses():
+@router.get("/address", response_model=List[Address])
+async def list_addresses(currency: Optional[str] = Query(None)):
     try:
         addresses = []
-        async for address in currency_collection.find():
-            addresses.append(Address(
-                address=address["address"],
-                currency=address["currency"],
-                id=address["_id"],
-                date_created=address["date_created"]
-            ))
+        if currency and CURRENCIES.get(currency.lower()):
+            currency = currency.lower()
+            async for address in app.currency_collections[currency].find():
+                addresses.append(Address(
+                    address=address["address"],
+                    currency=address["currency"],
+                    id=address["_id"],
+                    date_created=address["date_created"]
+                ))
+            return addresses
+
+        for currency in CURRENCIES:
+            async for address in app.currency_collections[currency].find():
+                addresses.append(Address(
+                    address=address["address"],
+                    currency=address["currency"],
+                    id=address["_id"],
+                    date_created=address["date_created"]
+                ))
         return addresses
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=f"Server error {e}") from e
 
 
-@router.get("/address/{id}", response_model=List[Address])
+@router.get("/address/{currency}/{id}", response_model=List[Address])
 async def retrieve_address(
-        id: int,
+        id: int, currency: str
 ):
     try:
         addresses = []
-        async for address in currency_collection.find({"_id": id}):
+        currency = currency.lower()
+        async for address in app.currency_collections[currency].find({"_id": id}):
             addresses.append(Address(
                 address=address["address"],
                 currency=address["currency"],
@@ -89,11 +100,13 @@ async def retrieve_address(
 
 
 # TODO: remove this endpoint when you are done testing
-@router.get("/private_key/")
-async def retrieve_private_key():
+@router.get("/private_key/{currency")
+async def retrieve_private_key(currency: str):
     try:
         private_keys = []
-        async for private_key in private_key_collection.find():
+        currency = currency.lower()
+        async for private_key in app.private_key_collections[currency].find():
+            print("HERE")
             private_keys.append({
                 "encrypted_private_key": private_key["encrypted_private_key"],
                 "encryption_key": private_key["encryption_key"],

@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 
+import mongomock
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -40,7 +41,7 @@ class TestAddresses:
     # Helper function to mock your real function responses
 
     # Test cases
-    @pytest.mark.asyncio
+    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
     async def test_create_address(self):
         # Mock the dependent functions and methods
         patch("your_project.routers.addresses.generate_address", side_effect=mock_generate_address)
@@ -48,32 +49,32 @@ class TestAddresses:
         patch("your_project.routers.addresses.private_key_collection.insert_one", return_value=None)
         patch("your_project.routers.addresses.currency_collection.insert_one", return_value=None)
 
-        response = client.post("/address/BTC")
+        response = client.post("/address/btc")
         assert response.status_code == 200
         assert response.json() == self.mock_address_data
 
-    @pytest.mark.asyncio
+    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
     async def test_create_address_invalid_currency(self):
         with pytest.raises(HTTPException):
             await create_addresses("INVALID_CURRENCY")
 
-    @pytest.mark.asyncio
+    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
     async def test_create_address_server_error(self):
         # Let’s mock an exception to simulate a server error
         patch("your_project.routers.addresses.generate_address", side_effect=Exception("Mock exception"))
 
         with pytest.raises(HTTPException) as e:
-            await create_addresses("BTC")
+            await create_addresses("btc")
         assert e.value.status_code == 500
         assert str(e.value.detail) == "Server error"
 
-    @pytest.mark.asyncio
+    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
     async def test_list_addresses(self):
         # Mocking the AsyncIOMotorCursor object returned by find method.
         fake_addresses = [
             {
                 "address": "some_address",
-                "currency": "BTC",
+                "currency": "btc",
                 "_id": "some_id",
                 "date_created": "some_date"
             }
@@ -90,7 +91,7 @@ class TestAddresses:
         assert response.status_code == 200
         assert response.json() == fake_addresses
 
-    @pytest.mark.asyncio
+    @patch("app.api.addresses.db_client", mongomock.MongoClient().get_database("mongo"))
     async def test_list_addresses_exception(self):
         patch("your_package.router.currency_collection.find", side_effect=Exception("DB Error"))
 

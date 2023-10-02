@@ -22,7 +22,6 @@ ensuring secure storage and recovery mechanisms for wallets.
 1. Clone the Repository:
 
 ```sh
-Copy code
 git clone <repository-url>
 cd <project-directory>
 ```
@@ -30,7 +29,6 @@ cd <project-directory>
 2. Build and Run the Docker Containers:
 
 ```sh
-Copy code
 docker-compose up --build
 ```
 
@@ -73,3 +71,24 @@ The API documentation is available at http://localhost:8000/docs
          docker-compose.yml
          requirements.txt
 ```
+
+## Running Tests
+
+To run the tests, first find the container ID of your app container.
+```sh
+docker ps
+```
+
+You can exec into the running container:
+
+```sh
+docker exec -it <container_id> pytest /app/test_main.py
+```
+
+## To Do
+
+- [ ] Add support for more cryptocurrencies.
+- [ ] Add support for more wallets.
+- [ ] Add support for HD Wallets.
+- [ ] Add support for API authentication methods.
+- [ ] Add support for API logging.
